@@ -1,10 +1,10 @@
 import { ObjectId } from "mongodb";
 
-export interface RankedMovie {
+export interface SavedMovie {
   id: number;
-  preference: string;
-  ranking: number;
-  rating: number;
+  preference?: string;
+  ranking?: number;
+  rating?: number;
 }
 
 export default interface UserProfile {
@@ -14,5 +14,6 @@ export default interface UserProfile {
   username: string;
   displayName: string;
   photoURL: string;
-  rankedMovies: RankedMovie[];
+  watchedMovies: SavedMovie[];
+  watchlistMovies: SavedMovie[];
 }
