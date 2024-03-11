@@ -13,17 +13,8 @@ export const getUserProfileQuery = async (
     .db()
     .collection<UserProfile>("userProfiles")
     .aggregate([
-      { $match: { ...identifyingObject } },
-      { $unwind: "$rankedMovies" },
-      {
-        $lookup: {
-          from: "movies",
-          localField: "rankedMovies.id",
-          foreignField: "id",
-          as: "rankedMovies.movie",
-        },
-      },
-      { $unwind: "$rankedMovies.movie" },
+      { $match: identifyingObject },
+      { $unwind: { path: "$watchedMovies", preserveNullAndEmptyArrays: true } },
       {
         $group: {
           _id: "$_id",
@@ -32,10 +23,102 @@ export const getUserProfileQuery = async (
           username: { $first: "$username" },
           displayName: { $first: "$displayName" },
           photoURL: { $first: "$photoURL" },
-          rankedMovies: { $push: "$rankedMovies" },
+          watchedMovies: { $push: "$watchedMovies" },
+          watchlistMovies: { $first: "$watchlistMovies" },
         },
       },
-      { $project: { _id: 0, "rankedMovies.movie._id": 0 } },
+      {
+        $lookup: {
+          from: "movies",
+          localField: "watchedMovies.id",
+          foreignField: "id",
+          as: "watchedMovie",
+        },
+      },
+      {
+        $set: {
+          watchedMovies: {
+            $map: {
+              input: "$watchedMovies",
+              in: {
+                $mergeObjects: [
+                  "$$this",
+                  {
+                    movie: {
+                      $arrayElemAt: [
+                        "$watchedMovie",
+                        { $indexOfArray: ["$watchedMovie.id", "$$this.id"] },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $unwind: { path: "$watchlistMovies", preserveNullAndEmptyArrays: true },
+      },
+      {
+        $group: {
+          _id: "$_id",
+          uid: { $first: "$uid" },
+          email: { $first: "$email" },
+          username: { $first: "$username" },
+          displayName: { $first: "$displayName" },
+          photoURL: { $first: "$photoURL" },
+          watchedMovies: { $first: "$watchedMovies" },
+          watchlistMovies: { $push: "$watchlistMovies" },
+        },
+      },
+      {
+        $lookup: {
+          from: "movies",
+          localField: "watchlistMovies.id",
+          foreignField: "id",
+          as: "watchlistMovie",
+        },
+      },
+      {
+        $set: {
+          watchlistMovies: {
+            $map: {
+              input: "$watchlistMovies",
+              in: {
+                $mergeObjects: [
+                  "$$this",
+                  {
+                    movie: {
+                      $arrayElemAt: [
+                        "$watchlistMovie",
+                        { $indexOfArray: ["$watchlistMovie.id", "$$this.id"] },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          "watchedMovies.movie._id": 0,
+          "watchedMovies.movie.credits": 0,
+          "watchedMovies.movie.backdrop_path": 0,
+          "watchedMovies.movie.overview": 0,
+          "watchedMovies.movie.runtime": 0,
+          "watchlistMovies.movie._id": 0,
+          "watchlistMovies.movie.credits": 0,
+          "watchlistMovies.movie.backdrop_path": 0,
+          "watchlistMovies.movie.overview": 0,
+          "watchlistMovies.movie.runtime": 0,
+          watchedMovie: 0,
+          watchlistMovie: 0,
+        },
+      },
     ])
     .toArray();
 

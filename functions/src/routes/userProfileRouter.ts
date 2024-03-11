@@ -1,7 +1,7 @@
 // require the express module
 import express from "express";
 import { getClient } from "../db";
-import UserProfile, { RankedMovie } from "../models/UserProfile";
+import UserProfile, { SavedMovie } from "../models/UserProfile";
 import { MongoClient } from "mongodb";
 import { getUserProfileQuery } from "../services/mongodb/userQueries";
 
@@ -14,12 +14,17 @@ const errorResponse = (error: any, res: any) => {
 };
 
 // GET requests
-userProfileRouter.get("/search-profile/uid/:uid", async (req, res) => {
+userProfileRouter.get("/search-profile/:type/:identifier", async (req, res) => {
   try {
-    const uid: string = req.params.uid;
+    const type: string = req.params.type;
+    const identifier: string = req.params.identifier;
 
     const client: MongoClient = await getClient();
-    const returnedUserProfile = await getUserProfileQuery("uid", uid, client);
+    const returnedUserProfile = await getUserProfileQuery(
+      type,
+      identifier,
+      client
+    );
 
     res.status(200).json(returnedUserProfile);
   } catch (err) {
@@ -27,30 +32,19 @@ userProfileRouter.get("/search-profile/uid/:uid", async (req, res) => {
   }
 });
 
-userProfileRouter.get(
-  "/search-profile/username/:username",
-  async (req, res) => {
-    try {
-      const username: string = req.params.username;
-
-      const client: MongoClient = await getClient();
-      const returnedUserProfile = await getUserProfileQuery(
-        "username",
-        username,
-        client
-      );
-
-      res.status(200).json(returnedUserProfile);
-    } catch (err) {
-      errorResponse(err, res);
-    }
-  }
-);
-
 // POST request
 userProfileRouter.post("/add-profile", async (req, res) => {
   try {
-    const newUserProfile: UserProfile = req.body.newUserProfile;
+    const uid: string = req.body.uid;
+    const newUserProfile: UserProfile = {
+      uid,
+      email: "",
+      username: "",
+      displayName: "",
+      photoURL: "",
+      watchedMovies: [],
+      watchlistMovies: [],
+    };
 
     const client: MongoClient = await getClient();
 
@@ -94,24 +88,30 @@ userProfileRouter.put("/update-profile", async (req, res) => {
 
 userProfileRouter.put("/add-movie", async (req, res) => {
   try {
+    const type: string = req.body.type;
     const uid: string = req.body.uid;
     const id: number = Number(req.body.id);
     const preference: string = req.body.preference;
     const ranking: number = Number(req.body.ranking);
 
-    const rankedMovie: RankedMovie = {
+    const savedMovie: SavedMovie = {
       id,
       preference,
       ranking,
       rating: 10,
     };
 
+    const query =
+      type === "watched"
+        ? { watchedMovies: savedMovie }
+        : { watchlistMovies: savedMovie };
+
     const client: MongoClient = await getClient();
 
     await client
       .db()
       .collection<UserProfile>("userProfiles")
-      .updateOne({ uid }, { $push: { rankedMovies: rankedMovie } });
+      .updateOne({ uid }, { $push: query });
 
     const returnedUserProfile = await getUserProfileQuery("uid", uid, client);
 
