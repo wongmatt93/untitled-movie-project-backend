@@ -2,18 +2,14 @@ import { Document, MongoClient } from "mongodb";
 import UserProfile from "../../models/UserProfile";
 
 export const getUserProfileQuery = async (
-  type: string,
-  identifier: string,
+  uid: string,
   client: MongoClient
 ): Promise<UserProfile | null> => {
-  const identifyingObject =
-    type === "uid" ? { uid: identifier } : { username: identifier };
-
   const results: Document = await client
     .db()
     .collection<UserProfile>("userProfiles")
     .aggregate([
-      { $match: identifyingObject },
+      { $match: { uid } },
       { $unwind: { path: "$watchedMovies", preserveNullAndEmptyArrays: true } },
       {
         $group: {
@@ -105,16 +101,6 @@ export const getUserProfileQuery = async (
       {
         $project: {
           _id: 0,
-          "watchedMovies.movie._id": 0,
-          "watchedMovies.movie.credits": 0,
-          "watchedMovies.movie.backdrop_path": 0,
-          "watchedMovies.movie.overview": 0,
-          "watchedMovies.movie.runtime": 0,
-          "watchlistMovies.movie._id": 0,
-          "watchlistMovies.movie.credits": 0,
-          "watchlistMovies.movie.backdrop_path": 0,
-          "watchlistMovies.movie.overview": 0,
-          "watchlistMovies.movie.runtime": 0,
           watchedMovie: 0,
           watchlistMovie: 0,
         },

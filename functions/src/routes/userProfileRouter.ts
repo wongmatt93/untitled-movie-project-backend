@@ -17,23 +17,162 @@ const errorResponse = (error: any, res: any) => {
 /**
  * Used to search for a user profile. Can use either uid or username to complete the request
  */
-userProfileRouter.get("/search-profile/:type/:identifier", async (req, res) => {
+userProfileRouter.get("/search-profile-by-uid/:uid", async (req, res) => {
   try {
-    const type: string = req.params.type;
-    const identifier: string = req.params.identifier;
+    const uid: string = req.params.uid;
 
     const client: MongoClient = await getClient();
-    const returnedUserProfile = await getUserProfileQuery(
-      type,
-      identifier,
-      client
-    );
+    const returnedUserProfile = await getUserProfileQuery(uid, client);
 
     res.status(200).json(returnedUserProfile);
   } catch (err) {
     errorResponse(err, res);
   }
 });
+
+/**
+ * Used to search for an array of user profiles based on supplied query
+ */
+userProfileRouter.get(
+  "/search-profiles-by-query/:query/:username",
+  async (req, res) => {
+    try {
+      const query: string = req.params.query;
+      const username: string = req.params.username;
+
+      const client: MongoClient = await getClient();
+      const results = await client
+        .db()
+        .collection<UserProfile>("userProfiles")
+        .aggregate([
+          {
+            $match: {
+              username: {
+                $regex: query,
+                $options: "i",
+                $ne: username,
+              },
+            },
+          },
+          {
+            $unwind: {
+              path: "$watchedMovies",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
+            $group: {
+              _id: "$_id",
+              uid: { $first: "$uid" },
+              email: { $first: "$email" },
+              username: { $first: "$username" },
+              displayName: { $first: "$displayName" },
+              photoURL: { $first: "$photoURL" },
+              watchedMovies: { $push: "$watchedMovies" },
+              watchlistMovies: { $first: "$watchlistMovies" },
+            },
+          },
+          {
+            $lookup: {
+              from: "movies",
+              localField: "watchedMovies.id",
+              foreignField: "id",
+              as: "watchedMovie",
+            },
+          },
+          {
+            $set: {
+              watchedMovies: {
+                $map: {
+                  input: "$watchedMovies",
+                  in: {
+                    $mergeObjects: [
+                      "$$this",
+                      {
+                        movie: {
+                          $arrayElemAt: [
+                            "$watchedMovie",
+                            {
+                              $indexOfArray: ["$watchedMovie.id", "$$this.id"],
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $unwind: {
+              path: "$watchlistMovies",
+              preserveNullAndEmptyArrays: true,
+            },
+          },
+          {
+            $group: {
+              _id: "$_id",
+              uid: { $first: "$uid" },
+              email: { $first: "$email" },
+              username: { $first: "$username" },
+              displayName: { $first: "$displayName" },
+              photoURL: { $first: "$photoURL" },
+              watchedMovies: { $first: "$watchedMovies" },
+              watchlistMovies: { $push: "$watchlistMovies" },
+            },
+          },
+          {
+            $lookup: {
+              from: "movies",
+              localField: "watchlistMovies.id",
+              foreignField: "id",
+              as: "watchlistMovie",
+            },
+          },
+          {
+            $set: {
+              watchlistMovies: {
+                $map: {
+                  input: "$watchlistMovies",
+                  in: {
+                    $mergeObjects: [
+                      "$$this",
+                      {
+                        movie: {
+                          $arrayElemAt: [
+                            "$watchlistMovie",
+                            {
+                              $indexOfArray: [
+                                "$watchlistMovie.id",
+                                "$$this.id",
+                              ],
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+          {
+            $project: {
+              _id: 0,
+              watchedMovie: 0,
+              watchlistMovie: 0,
+            },
+          },
+        ])
+        .toArray();
+
+      res.status(200).json(results);
+    } catch (err) {
+      errorResponse(err, res);
+    }
+  }
+);
 
 // POST request
 /**
@@ -60,7 +199,6 @@ userProfileRouter.post("/add-profile", async (req, res) => {
       .insertOne(newUserProfile);
 
     const returnedUserProfile = await getUserProfileQuery(
-      "uid",
       newUserProfile.uid,
       client
     );
@@ -87,7 +225,7 @@ userProfileRouter.put("/update-profile", async (req, res) => {
       .collection<UserProfile>("userProfiles")
       .replaceOne({ uid }, updatedUserProfile);
 
-    const returnedUserProfile = await getUserProfileQuery("uid", uid, client);
+    const returnedUserProfile = await getUserProfileQuery(uid, client);
 
     res.status(200).json(returnedUserProfile);
   } catch (err) {
@@ -125,7 +263,7 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
         }
       );
 
-    const returnedUserProfile = await getUserProfileQuery("uid", uid, client);
+    const returnedUserProfile = await getUserProfileQuery(uid, client);
 
     res.status(200).json(returnedUserProfile);
   } catch (err) {
@@ -148,7 +286,7 @@ userProfileRouter.put("/remove-watched-movie", async (req, res) => {
       .collection<UserProfile>("userProfiles")
       .updateOne({ uid }, { $pull: { watchedMovies: { id } } });
 
-    const returnedUserProfile = await getUserProfileQuery("uid", uid, client);
+    const returnedUserProfile = await getUserProfileQuery(uid, client);
 
     res.status(200).json(returnedUserProfile);
   } catch (err) {
@@ -175,7 +313,7 @@ userProfileRouter.put("/add-watchlist-movie", async (req, res) => {
       .collection<UserProfile>("userProfiles")
       .updateOne({ uid }, { $push: { watchlistMovies: savedMovie } });
 
-    const returnedUserProfile = await getUserProfileQuery("uid", uid, client);
+    const returnedUserProfile = await getUserProfileQuery(uid, client);
 
     res.status(200).json(returnedUserProfile);
   } catch (err) {
@@ -198,7 +336,7 @@ userProfileRouter.put("/remove-watchlist-movie", async (req, res) => {
       .collection<UserProfile>("userProfiles")
       .updateOne({ uid }, { $pull: { watchlistMovies: { id } } });
 
-    const returnedUserProfile = await getUserProfileQuery("uid", uid, client);
+    const returnedUserProfile = await getUserProfileQuery(uid, client);
 
     res.status(200).json(returnedUserProfile);
   } catch (err) {
