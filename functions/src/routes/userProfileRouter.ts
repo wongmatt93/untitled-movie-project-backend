@@ -15,7 +15,7 @@ const errorResponse = (error: any, res: any) => {
 
 // GET requests
 /**
- * Used to search for a user profile. Can use either uid or username to complete the request
+ * Used to search for a user profile. Uses uid to complete the request
  */
 userProfileRouter.get("/search-profile-by-uid/:uid", async (req, res) => {
   try {
@@ -198,10 +198,7 @@ userProfileRouter.post("/add-profile", async (req, res) => {
       .collection<UserProfile>("userProfiles")
       .insertOne(newUserProfile);
 
-    const returnedUserProfile = await getUserProfileQuery(
-      newUserProfile.uid,
-      client
-    );
+    const returnedUserProfile = await getUserProfileQuery(uid, client);
 
     res.status(201).json(returnedUserProfile);
   } catch (err) {

@@ -5,6 +5,7 @@ import { getClient } from "../db";
 import Movie from "../models/Movie";
 import axios from "axios";
 import { MovieCredits } from "../models/Movie";
+import { getMoviesQuery } from "../services/mongodb/movieQueries";
 
 // create a new Router object
 const movieRouter = express.Router();
@@ -15,6 +16,9 @@ const errorResponse = (error: any, res: any) => {
 };
 
 // GET request
+/**
+ * Used to search for a movie. Uses id to complete the request
+ */
 movieRouter.get("/search/:id", async (req, res) => {
   try {
     const id: number = Number(req.params.id);
@@ -80,6 +84,48 @@ movieRouter.get("/search/:id", async (req, res) => {
 
       res.status(201).json(addedMovie);
     }
+  } catch (err) {
+    errorResponse(err, res);
+  }
+});
+
+/**
+ * Used to get Popular movies from TMDB and formatted in a way for this app
+ */
+movieRouter.get("/get-popular-movies", async (_, res) => {
+  try {
+    const api_key: string = functions.config().tmdb.api_key;
+    const popularMovies: Movie[] = (
+      await axios.get("https://api.themoviedb.org/3/movie/popular", {
+        params: { api_key },
+      })
+    ).data.results;
+
+    const movies: Movie[] = await getMoviesQuery(popularMovies, api_key);
+
+    res.status(201).json(movies);
+  } catch (err) {
+    errorResponse(err, res);
+  }
+});
+
+/**
+ * Used to get movies per search query from TMDB and formatted in a way for this app
+ */
+movieRouter.get("/get-movies-by-query/:query", async (req, res) => {
+  try {
+    const query: string = req.params.query;
+    const api_key: string = functions.config().tmdb.api_key;
+
+    const returnedMovies: Movie[] = (
+      await axios.get("https://api.themoviedb.org/3/search/movie", {
+        params: { api_key, query },
+      })
+    ).data.results;
+
+    const movies: Movie[] = await getMoviesQuery(returnedMovies, api_key);
+
+    res.status(201).json(movies);
   } catch (err) {
     errorResponse(err, res);
   }
