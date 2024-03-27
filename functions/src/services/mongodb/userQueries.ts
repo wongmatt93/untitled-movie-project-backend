@@ -11,6 +11,7 @@ export const getUserProfileQuery = async (
     .aggregate([
       { $match: { uid } },
       { $unwind: { path: "$watchedMovies", preserveNullAndEmptyArrays: true } },
+      { $sort: { "watchedMovies.ranking": 1 } },
       {
         $group: {
           _id: "$_id",

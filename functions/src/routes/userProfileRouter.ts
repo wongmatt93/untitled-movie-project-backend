@@ -239,6 +239,7 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
     const id: number = Number(req.body.id);
     const preference: string = req.body.preference;
     const ranking: number = Number(req.body.ranking);
+    const match: boolean = req.body.match;
 
     const savedMovie: SavedMovie = {
       id,
@@ -248,6 +249,17 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
     };
 
     const client: MongoClient = await getClient();
+
+    if (!match) {
+      await client
+        .db()
+        .collection<UserProfile>("userProfiles")
+        .updateOne(
+          { uid },
+          { $inc: { "watchedMovies.$[elem].ranking": 1 } },
+          { arrayFilters: [{ "elem.ranking": { $gte: ranking } }] }
+        );
+    }
 
     await client
       .db()
