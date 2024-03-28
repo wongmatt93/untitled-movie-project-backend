@@ -239,6 +239,7 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
     const id: number = Number(req.body.id);
     const preference: string = req.body.preference;
     const ranking: number = Number(req.body.ranking);
+    // Checks to see if incoming watched movie has same ranking as another
     const match: boolean = req.body.match;
 
     const savedMovie: SavedMovie = {
@@ -250,6 +251,8 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
 
     const client: MongoClient = await getClient();
 
+    // If incoming watched movie does not match another,
+    // then increment all movies ranked after by 1
     if (!match) {
       await client
         .db()
@@ -285,10 +288,47 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
  */
 userProfileRouter.put("/remove-watched-movie", async (req, res) => {
   try {
-    const uid: string = req.body.uid;
-    const id: number = Number(req.body.id);
+    const uid = req.body.uid;
+    const id = Number(req.body.id);
 
-    const client: MongoClient = await getClient();
+    const client = await getClient();
+
+    const userProfile = await client
+      .db()
+      .collection<UserProfile>("userProfiles")
+      .findOne({ uid });
+
+    const movieToBeRemovedIndex = userProfile?.watchedMovies.findIndex(
+      (movie) => movie.id === id
+    );
+
+    if (movieToBeRemovedIndex !== -1 && movieToBeRemovedIndex) {
+      const movieToBeRemoved = userProfile?.watchedMovies.splice(
+        movieToBeRemovedIndex,
+        1
+      )[0];
+
+      if (movieToBeRemoved) {
+        const match = userProfile?.watchedMovies.some(
+          (movie) => movie.ranking === movieToBeRemoved.ranking
+        );
+
+        if (!match) {
+          await client
+            .db()
+            .collection<UserProfile>("userProfiles")
+            .updateOne(
+              { uid },
+              { $inc: { "watchedMovies.$[elem].ranking": -1 } },
+              {
+                arrayFilters: [
+                  { "elem.ranking": { $gt: movieToBeRemoved.ranking } },
+                ],
+              }
+            );
+        }
+      }
+    }
 
     await client
       .db()
