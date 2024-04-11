@@ -1,8 +1,13 @@
 import { ObjectId } from "mongodb";
 
+interface WatchedMovies {
+  positive: SavedMovie[];
+  neutral: SavedMovie[];
+  negative: SavedMovie[];
+}
+
 export interface SavedMovie {
   id: number;
-  preference?: string;
   ranking?: number;
   rating?: number;
 }
@@ -14,6 +19,6 @@ export default interface UserProfile {
   username: string;
   displayName: string;
   photoURL: string;
-  watchedMovies: SavedMovie[];
+  watchedMovies: WatchedMovies;
   watchlistMovies: SavedMovie[];
 }

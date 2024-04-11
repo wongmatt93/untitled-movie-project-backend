@@ -187,7 +187,11 @@ userProfileRouter.post("/add-profile", async (req, res) => {
       username: "",
       displayName: "",
       photoURL: "",
-      watchedMovies: [],
+      watchedMovies: {
+        positive: [],
+        neutral: [],
+        negative: [],
+      },
       watchlistMovies: [],
     };
 
@@ -244,7 +248,6 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
 
     const savedMovie: SavedMovie = {
       id,
-      preference,
       ranking,
       rating: 10,
     };
@@ -259,7 +262,7 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
         .collection<UserProfile>("userProfiles")
         .updateOne(
           { uid },
-          { $inc: { "watchedMovies.$[elem].ranking": 1 } },
+          { $inc: { [`watchedMovies.${preference}.$[elem].ranking`]: 1 } },
           { arrayFilters: [{ "elem.ranking": { $gte: ranking } }] }
         );
     }
@@ -270,13 +273,48 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
       .updateOne(
         { uid },
         {
-          $push: { watchedMovies: savedMovie },
+          $push: { [`watchedMovies.${preference}`]: savedMovie },
           $pull: { watchlistMovies: { id } },
         }
       );
 
-    const returnedUserProfile = await getUserProfileQuery(uid, client);
+    const profileToUpdate = await client
+      .db()
+      .collection<UserProfile>("userProfiles")
+      .findOne({ uid });
 
+    // Check if returnedUserProfile is null
+    if (!profileToUpdate) {
+      throw new Error("User profile not found");
+    }
+
+    // Sort the watchedMovies arrays
+    profileToUpdate.watchedMovies.positive.sort(
+      (a, b) => a.ranking! - b.ranking!
+    );
+    profileToUpdate.watchedMovies.neutral.sort(
+      (a, b) => a.ranking! - b.ranking!
+    );
+    profileToUpdate.watchedMovies.negative.sort(
+      (a, b) => a.ranking! - b.ranking!
+    );
+
+    // Update the user profile with the sorted arrays
+    await client
+      .db()
+      .collection<UserProfile>("userProfiles")
+      .updateOne(
+        { uid },
+        {
+          $set: {
+            "watchedMovies.positive": profileToUpdate.watchedMovies.positive,
+            "watchedMovies.neutral": profileToUpdate.watchedMovies.neutral,
+            "watchedMovies.negative": profileToUpdate.watchedMovies.negative,
+          },
+        }
+      );
+
+    const returnedUserProfile = await getUserProfileQuery(uid, client);
     res.status(200).json(returnedUserProfile);
   } catch (err) {
     errorResponse(err, res);
@@ -286,62 +324,62 @@ userProfileRouter.put("/add-watched-movie", async (req, res) => {
 /**
  * Used to remove a movie from the user's watchedMovie array
  */
-userProfileRouter.put("/remove-watched-movie", async (req, res) => {
-  try {
-    const uid = req.body.uid;
-    const id = Number(req.body.id);
+// userProfileRouter.put("/remove-watched-movie", async (req, res) => {
+//   try {
+//     const uid = req.body.uid;
+//     const id = Number(req.body.id);
 
-    const client = await getClient();
+//     const client = await getClient();
 
-    const userProfile = await client
-      .db()
-      .collection<UserProfile>("userProfiles")
-      .findOne({ uid });
+//     const userProfile = await client
+//       .db()
+//       .collection<UserProfile>("userProfiles")
+//       .findOne({ uid });
 
-    const movieToBeRemovedIndex = userProfile?.watchedMovies.findIndex(
-      (movie) => movie.id === id
-    );
+//     const movieToBeRemovedIndex = userProfile?.watchedMovies.findIndex(
+//       (movie) => movie.id === id
+//     );
 
-    if (movieToBeRemovedIndex !== -1 && movieToBeRemovedIndex) {
-      const movieToBeRemoved = userProfile?.watchedMovies.splice(
-        movieToBeRemovedIndex,
-        1
-      )[0];
+//     if (movieToBeRemovedIndex !== -1 && movieToBeRemovedIndex) {
+//       const movieToBeRemoved = userProfile?.watchedMovies.splice(
+//         movieToBeRemovedIndex,
+//         1
+//       )[0];
 
-      if (movieToBeRemoved) {
-        const match = userProfile?.watchedMovies.some(
-          (movie) => movie.ranking === movieToBeRemoved.ranking
-        );
+//       if (movieToBeRemoved) {
+//         const match = userProfile?.watchedMovies.some(
+//           (movie) => movie.ranking === movieToBeRemoved.ranking
+//         );
 
-        if (!match) {
-          await client
-            .db()
-            .collection<UserProfile>("userProfiles")
-            .updateOne(
-              { uid },
-              { $inc: { "watchedMovies.$[elem].ranking": -1 } },
-              {
-                arrayFilters: [
-                  { "elem.ranking": { $gt: movieToBeRemoved.ranking } },
-                ],
-              }
-            );
-        }
-      }
-    }
+//         if (!match) {
+//           await client
+//             .db()
+//             .collection<UserProfile>("userProfiles")
+//             .updateOne(
+//               { uid },
+//               { $inc: { "watchedMovies.$[elem].ranking": -1 } },
+//               {
+//                 arrayFilters: [
+//                   { "elem.ranking": { $gt: movieToBeRemoved.ranking } },
+//                 ],
+//               }
+//             );
+//         }
+//       }
+//     }
 
-    await client
-      .db()
-      .collection<UserProfile>("userProfiles")
-      .updateOne({ uid }, { $pull: { watchedMovies: { id } } });
+//     await client
+//       .db()
+//       .collection<UserProfile>("userProfiles")
+//       .updateOne({ uid }, { $pull: { watchedMovies: { id } } });
 
-    const returnedUserProfile = await getUserProfileQuery(uid, client);
+//     const returnedUserProfile = await getUserProfileQuery(uid, client);
 
-    res.status(200).json(returnedUserProfile);
-  } catch (err) {
-    errorResponse(err, res);
-  }
-});
+//     res.status(200).json(returnedUserProfile);
+//   } catch (err) {
+//     errorResponse(err, res);
+//   }
+// });
 
 /**
  * Used to add movies to the user's watchlist array
